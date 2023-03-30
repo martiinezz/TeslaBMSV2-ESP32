@@ -1,4 +1,4 @@
-# TeslaBMSV2
+# TeslaBMSV2 - ESP32
 
 This software is designed to run on the SimpBMS.
 
