@@ -1,6 +1,7 @@
 #pragma once
 #include "config.h"
 #include "BMSModule.h"
+#include <esp32_can.h>
 
 class BMSModuleManager
 {
@@ -44,6 +45,7 @@ class BMSModuleManager
     void printAllCSV(unsigned long timestamp,float current, int SOC, int delim);
     void printPackSummary();
     void printPackDetails(int digits);
+    String htmlPackDetails(float current, int SOC);
 int getNumModules();
 
   private:

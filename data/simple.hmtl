@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SimpBMS DashBoard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+    <script src="/js/gauge.min.js"></script>
+  </head>
+  <body>
+    <div class="topnav">
+      <h2>Simple Dashboard</h2>
+    </div>
+    <div class="content">
+        <div class="card">
+          <p class="card-title">SOC</p>
+          <canvas id="gauge-humidity"></canvas>
+        </div>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card-title">Temp</p>
+          <canvas id="gauge-temperature"></canvas>
+        </div>
+      </div>
+    </div>
+    <script src="/js/script.js"></script>
+  </body>
+</html>
