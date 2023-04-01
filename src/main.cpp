@@ -169,8 +169,8 @@ const int IN3 = 39;   // input 1 - high active
 const int IN4 = 36;   // input 2- high active 
 const int OUT1 = 25;  // output 1 - high active
 const int OUT2 = 26;  // output 2 - high active
-const int OUT3 = 22;  // output 3 - high active
-const int OUT4 = 19;  // output 4 - high active
+const int OUT3 = 25;  // output 3 - high active
+const int OUT4 = 26;  // output 4 - high active
 const int OUT5 = 4;   // output 5 - Low active
 const int OUT6 = 27;  // output 6 - Low active
 const int OUT7 = 13;  // output 7 - Low active
@@ -178,7 +178,6 @@ const int OUT8 = 15;  // output 8 - Low active
 const int led = 22;
 const int CAN_RX = 17; 
 const int CAN_TX = 16;
-const int BMBfault = 22;
 
 byte bmsstatus = 0;
 //bms status values
@@ -534,25 +533,6 @@ void setup()
 
 CAN0.watchFor();
 
-  // Can0.begin(settings.canSpeed);
-  // CAN_filter_t allPassFilter; // Enables extended addresses
-  // allPassFilter.id = 0;
-  // allPassFilter.ext = 1;
-  // allPassFilter.rtr = 0;
-
-  // for (int filterNum = 4; filterNum < 16; filterNum++) {
-  //   Can0.setFilter(allPassFilter, filterNum);
-  // }
-
-
-
-  // //if using enable pins on a transceiver they need to be set on
-  // adc->adc0->setAveraging(16); // set number of averages
-  // adc->adc0->setResolution(16); // set bits of resolution
-  // adc->adc0->setConversionSpeed(ADC_CONVERSION_SPEED::HIGH_SPEED);
-  // adc->adc0->setSamplingSpeed(ADC_SAMPLING_SPEED::LOW_SPEED);
-  // adc->adc0->startContinuous(ACUR1);
-
   analogReadResolution(12);
   analogSetWidth(12);
   analogSetClockDiv(100);
@@ -616,16 +596,10 @@ Serial.print("CPU2: ");
     default : Serial.println ("NO_MEAN");
   }
   
-  Serial.println();
-  ///////////////////
-
-
   // enable WDT
   noInterrupts();                                         // don't allow interrupts while setting up WDOG
   esp_task_wdt_init(5, true); //enable panic so ESP32 restarts after 5 sec
   esp_task_wdt_add(NULL); //add current thread to WDT watch
-  esp_task_wdt_reset(); // reset timer
-  delay(10);
   interrupts();
   /////////////////
 
@@ -3905,8 +3879,7 @@ void outputdebug()
 void resetwdog()
 {
   noInterrupts();                                     //   No - reset WDT
-  // WDOG_REFRESH = 0xA602;
-  // WDOG_REFRESH = 0xB480;
+  esp_task_wdt_reset(); // reset timer
   interrupts();
 }
 
