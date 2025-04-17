@@ -169,15 +169,20 @@ const int IN3 = 39;   // input 1 - high active
 const int IN4 = 36;   // input 2- high active 
 const int OUT1 = 25;  // output 1 - high active
 const int OUT2 = 26;  // output 2 - high active
-const int OUT3 = 25;  // output 3 - high active
-const int OUT4 = 26;  // output 4 - high active
+const int OUT3 = 19;  // output 3 - high active (changed to avoid conflict with OUT1)
+const int OUT4 = 21;  // output 4 - high active (changed to avoid conflict with OUT2)
 const int OUT5 = 4;   // output 5 - Low active
 const int OUT6 = 27;  // output 6 - Low active
 const int OUT7 = 13;  // output 7 - Low active
 const int OUT8 = 15;  // output 8 - Low active
+// Compile-time check for duplicated output pin assignments for contactor and relay outputs
+static_assert(OUT1 != OUT3, "OUT1 and OUT3 must not use the same GPIO pin");
+static_assert(OUT2 != OUT4, "OUT2 and OUT4 must not use the same GPIO pin");
 const int led = 22;
-const int CAN_RX = 17; 
+const int CAN_RX = 17;
 const int CAN_TX = 16;
+// Track whether CAN hardware initialized successfully
+bool canAvailable = false;
 
 byte bmsstatus = 0;
 //bms status values
@@ -395,20 +400,30 @@ void loadSettings()
 CAN_message_t msg;
 CAN_message_t inMsg;
 
-void ESPsendCAN(const CAN_message_t &msg) 
+void ESPsendCAN(const CAN_message_t &msg)
 {
+    // If CAN was not initialized successfully, skip transmission
+    if (!canAvailable) {
+        SERIALCONSOLE.println("ESPsendCAN: CAN not available, message dropped");
+        return;
+    }
+
     CAN_FRAME out;
     out.rtr = 0;
     out.extended = msg.flags.extended;
     out.id = msg.id;
     out.length = msg.len;
 
-    for (uint8_t i = 0; i < msg.len; ++i)
-    {
+    for (uint8_t i = 0; i < msg.len; ++i) {
         out.data.uint8[i] = msg.buf[i];
     }
 
-    CAN0.sendFrame(out);
+    // Send the CAN frame and check for success
+    bool ok = CAN0.sendFrame(out);
+    if (!ok) {
+        SERIALCONSOLE.print("ESPsendCAN: sendFrame failed for ID 0x");
+        SERIALCONSOLE.println(out.id, HEX);
+    }
 }
 
 uint32_t lastUpdate;
@@ -526,12 +541,13 @@ void setup()
   }
 
   CAN0.setCANPins(gpio_num_t(CAN_RX), gpio_num_t(CAN_TX));
-  if (!CAN0.begin(settings.canSpeed)) {
-    SERIALCONSOLE.println("Starting CAN failed!");
-    while (1);
+  if (CAN0.begin(settings.canSpeed)) {
+    canAvailable = true;
+    CAN0.watchFor();
+  } else {
+    canAvailable = false;
+    SERIALCONSOLE.println("Starting CAN failed! Continuing without CAN.");
   }
-
-CAN0.watchFor();
 
   analogReadResolution(12);
   analogSetWidth(12);
@@ -663,9 +679,10 @@ Serial.print("CPU2: ");
 void loop()
 {
 
-  while (CAN0.available())
-  {
-    canread();
+  if (canAvailable) {
+    while (CAN0.available()) {
+      canread();
+    }
   }
 
   if (SERIALCONSOLE.available() > 0)
