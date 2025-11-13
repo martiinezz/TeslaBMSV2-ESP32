@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 import random
 import json
 import time
@@ -83,6 +83,47 @@ def post_settings():
 @app.route('/api/logs')
 def api_logs():
     return "BMS logs: System running\n"
+
+@app.route('/api/ota/url', methods=['POST'])
+def ota_url():
+    data = request.get_json()
+    url = data.get('url')
+    # Mock OTA from URL
+    return jsonify({"message": f"OTA update started from URL: {url}"})
+
+@app.route('/api/ota/upload', methods=['POST'])
+def ota_upload():
+    if 'firmware' not in request.files:
+        return jsonify({"message": "No file uploaded"}), 400
+    file = request.files['firmware']
+    if file.filename == '':
+        return jsonify({"message": "No file selected"}), 400
+    # Mock processing the file
+    return jsonify({"message": f"Firmware {file.filename} uploaded and update started"})
+
+@app.route('/api/wifi/scan')
+def wifi_scan():
+    # Mock WiFi networks
+    networks = [
+        {"ssid": "HomeWiFi", "rssi": -50},
+        {"ssid": "OfficeNet", "rssi": -60},
+        {"ssid": "Guest", "rssi": -70},
+        {"ssid": "PublicWiFi", "rssi": -80}
+    ]
+    return jsonify(networks)
+
+@app.route('/api/wifi/connect', methods=['POST'])
+def wifi_connect():
+    data = request.get_json()
+    ssid = data.get('ssid')
+    password = data.get('password')
+    # Mock connection
+    return jsonify({"message": f"Connected to {ssid}"})
+
+@app.route('/api/wifi/status')
+def wifi_status():
+    # Mock status
+    return jsonify({"connected": True, "ssid": "HomeWiFi"})
 
 @app.route('/ccs/<path:filename>')
 def css_files(filename):

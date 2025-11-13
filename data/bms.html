@@ -6,12 +6,14 @@
 </head>
 <html>
 <body>
-    <h1>SimpBMS Dashboard</h1>
+    <h1>SimpBMS Dashboard <span id="wifi-status" style="font-size: 0.8em;">🟢</span></h1>
     <div class="tabs">
         <button class="tab-button active" onclick="showTab('status')">Status</button>
         <button class="tab-button" onclick="showTab('cells')">Cells</button>
         <button class="tab-button" onclick="showTab('settings')">Settings</button>
         <button class="tab-button" onclick="showTab('logs')">Logs</button>
+        <button class="tab-button" onclick="showTab('ota')">OTA</button>
+        <button class="tab-button" onclick="showTab('wifi')">WiFi</button>
     </div>
 
     <div id="status" class="tab-content">
@@ -81,6 +83,26 @@
         <div id="log-container" style="background-color: #000; color: #0f0; font-family: monospace; padding: 10px; height: 400px; overflow-y: auto; white-space: pre-wrap;"></div>
     </div>
 
+    <div id="ota" class="tab-content" style="display:none;">
+        <h3>OTA Firmware Update</h3>
+        <form id="ota-url-form">
+            <label>Update from URL: <input type="url" name="otaUrl" placeholder="http://example.com/firmware.bin" required></label><br>
+            <button type="submit">Update from URL</button>
+        </form>
+        <hr>
+        <form id="ota-upload-form" enctype="multipart/form-data">
+            <label>Upload Firmware File: <input type="file" name="firmware" accept=".bin" required></label><br>
+            <button type="submit">Upload and Update</button>
+        </form>
+        <div id="ota-status"></div>
+    </div>
+
+    <div id="wifi" class="tab-content" style="display:none;">
+        <h3>WiFi Manager</h3>
+        <button id="scan-wifi">Scan Networks</button>
+        <div id="wifi-networks"></div>
+    </div>
+
 <script>
 let currentTab = 'status';
 
@@ -140,6 +162,17 @@ function updateLogs() {
         let container = document.getElementById('log-container');
         container.scrollTop = container.scrollHeight;
     }).catch(error => console.error('Error fetching logs:', error));
+}
+
+function updateWifiStatus() {
+    fetch('http://localhost:5000/api/wifi/status').then(response => response.json()).then(status => {
+        let icon = status.connected ? '🟢' : '🔴';
+        document.getElementById('wifi-status').textContent = icon;
+        document.getElementById('wifi-status').title = status.connected ? `Connected to ${status.ssid}` : 'Not connected';
+    }).catch(error => {
+        console.error('Error fetching WiFi status:', error);
+        document.getElementById('wifi-status').textContent = '❓';
+    });
 }
 
 function updateData() {
@@ -284,11 +317,80 @@ document.getElementById('settings-form').addEventListener('submit', function(e) 
     }).catch(error => console.error('Error saving settings:', error));
 });
 
+document.getElementById('ota-url-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    let formData = new FormData(this);
+    let url = formData.get('otaUrl');
+    fetch('http://localhost:5000/api/ota/url', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    }).then(response => response.json()).then(data => {
+        document.getElementById('ota-status').textContent = data.message;
+    }).catch(error => {
+        console.error('Error starting OTA:', error);
+        document.getElementById('ota-status').textContent = 'Error starting OTA update';
+    });
+});
+
+document.getElementById('ota-upload-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    let formData = new FormData(this);
+    fetch('http://localhost:5000/api/ota/upload', {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json()).then(data => {
+        document.getElementById('ota-status').textContent = data.message;
+    }).catch(error => {
+        console.error('Error uploading firmware:', error);
+        document.getElementById('ota-status').textContent = 'Error uploading firmware';
+    });
+});
+
+document.getElementById('scan-wifi').addEventListener('click', function() {
+    fetch('http://localhost:5000/api/wifi/scan').then(response => response.json()).then(networks => {
+        let html = '<h4>Available Networks:</h4>';
+        networks.forEach(net => {
+            html += `<div>
+                <strong>${net.ssid}</strong> (Signal: ${net.rssi})
+                <form class="wifi-connect-form" data-ssid="${net.ssid}">
+                    <input type="password" name="password" placeholder="Password" required>
+                    <button type="submit">Connect</button>
+                </form>
+            </div>`;
+        });
+        document.getElementById('wifi-networks').innerHTML = html;
+    }).catch(error => {
+        console.error('Error scanning WiFi:', error);
+        document.getElementById('wifi-networks').innerHTML = 'Error scanning networks';
+    });
+});
+
+document.addEventListener('submit', function(e) {
+    if (e.target.classList.contains('wifi-connect-form')) {
+        e.preventDefault();
+        let ssid = e.target.getAttribute('data-ssid');
+        let password = e.target.password.value;
+        fetch('http://localhost:5000/api/wifi/connect', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ssid: ssid, password: password})
+        }).then(response => response.json()).then(data => {
+            alert(data.message);
+        }).catch(error => {
+            console.error('Error connecting to WiFi:', error);
+            alert('Error connecting to WiFi');
+        });
+    }
+});
+
 setInterval(updateData, 2000);
 setInterval(updateLogs, 5000);
+setInterval(updateWifiStatus, 10000); // update WiFi status every 10s
 updateData(); // initial load
 updateLogs(); // initial load
 loadSettings(); // load settings on page load
+updateWifiStatus(); // initial WiFi status
 </script>
 </body>
 </html>
