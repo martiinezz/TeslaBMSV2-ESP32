@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<head>
+    <title>ESP32 SimpBMS Dashboard</title>
+    <link rel="stylesheet" type="text/css" href="ccs/bms.css">
+</head>
+<html>
+<body>
+    <h1>SimpBMS Dashboard</h1>
+    <div class="tabs">
+        <button class="tab-button active" onclick="showTab('status')">Status</button>
+        <button class="tab-button" onclick="showTab('cells')">Cells</button>
+        <button class="tab-button" onclick="showTab('settings')">Settings</button>
+        <button class="tab-button" onclick="showTab('logs')">Logs</button>
+    </div>
+
+    <div id="status" class="tab-content">
+        <div class="metrics-grid">
+            <div class="metric-card" id="soc-card">
+                <div class="label">SOC</div>
+                <div id="battery-svg"></div>
+            </div>
+            <div class="metric-card" id="current-card">
+                <div class="label">Current</div>
+                <div class="value"><span id="current-value">0</span> A</div>
+            </div>
+            <div class="metric-card" id="low-cell-card">
+                <div class="label">Low Cell Voltage</div>
+                <div class="value"><span id="low-cell-value">0</span> V</div>
+            </div>
+            <div class="metric-card" id="high-cell-card">
+                <div class="label">High Cell Voltage</div>
+                <div class="value"><span id="high-cell-value">0</span> V</div>
+            </div>
+            <div class="metric-card" id="delta-card">
+                <div class="label">Delta Voltage</div>
+                <div class="value"><span id="delta-value">0</span> mV</div>
+            </div>
+            <div class="metric-card" id="temp-card">
+                <div class="label">Avg Temperature</div>
+                <div class="value"><span id="avg-temp-value">0</span> °C</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Pack Voltage</div>
+                <div class="value"><span id="voltage-value">0</span> V</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Avg Cell Voltage</div>
+                <div class="value"><span id="avg-cell-value">0</span> V</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Modules</div>
+                <div class="value"><span id="modules-value">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="cells" class="tab-content" style="display:none;">
+        <div id="modules">Loading...</div>
+    </div>
+
+    <div id="settings" class="tab-content" style="display:none;">
+        <form id="settings-form">
+            <h3>Battery Settings</h3>
+            <label>Over Voltage Setpoint (mV): <input type="number" name="OverVSetpoint" step="1"></label><br>
+            <label>Under Voltage Setpoint (mV): <input type="number" name="UnderVSetpoint" step="1"></label><br>
+            <label>Charge Voltage Setpoint (mV): <input type="number" name="ChargeVsetpoint" step="1"></label><br>
+            <label>Discharge Voltage Setpoint (mV): <input type="number" name="DischVsetpoint" step="1"></label><br>
+            <label>Balance Voltage (mV): <input type="number" name="balanceVoltage" step="1"></label><br>
+            <label>Over Temperature Setpoint (°C): <input type="number" name="OverTSetpoint" step="1"></label><br>
+            <label>Under Temperature Setpoint (°C): <input type="number" name="UnderTSetpoint" step="1"></label><br>
+            <label>Battery Capacity (Ah): <input type="number" name="CAP" step="1"></label><br>
+            <label>Parallel Strings: <input type="number" name="Pstrings" step="1"></label><br>
+            <label>Series Cells: <input type="number" name="Scells" step="1"></label><br>
+            <button type="submit">Save Settings</button>
+        </form>
+    </div>
+
+    <div id="logs" class="tab-content" style="display:none;">
+        <h3>Serial Console Logs</h3>
+        <div id="log-container" style="background-color: #000; color: #0f0; font-family: monospace; padding: 10px; height: 400px; overflow-y: auto; white-space: pre-wrap;"></div>
+    </div>
+
+<script>
+let currentTab = 'status';
+
+function showTab(tabName) {
+    document.getElementById(currentTab).style.display = 'none';
+    document.getElementById(tabName).style.display = 'block';
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    currentTab = tabName;
+}
+
+function createBatterySVG(soc) {
+    let color;
+    if (soc > 80) color = '#00ff00';
+    else if (soc > 60) color = '#ffff00';
+    else if (soc > 40) color = '#ff8000';
+    else if (soc > 20) color = '#ff4000';
+    else color = '#ff0000';
+
+    let fillWidth = (soc / 100) * 180; // 180 is the width of the battery body
+
+    return `<svg width="150" height="80" viewBox="0 0 200 90">
+        <rect x="10" y="15" width="180" height="60" fill="none" stroke="#000" stroke-width="2" rx="5"/>
+        <rect x="190" y="37.5" width="10" height="15" fill="#000" rx="2"/>
+        <rect x="10" y="15" width="${fillWidth}" height="60" fill="${color}"/>
+        <text x="100" y="47" text-anchor="middle" font-size="20" fill="#000">${soc}%</text>
+    </svg>`;
+}
+
+function getCurrentColor(current) {
+    if (current > 0.1) return '#27ae60'; // green for charging
+    if (current < -0.1) return '#e74c3c'; // red for discharging
+    return '#ecf0f1'; // neutral
+}
+
+function getCellColor(voltage) {
+    if (voltage <= 3.2) return '#e74c3c'; // red
+    if (voltage >= 3.8) return '#27ae60'; // green
+    return '#ecf0f1'; // neutral
+}
+
+function getDeltaColor(delta) {
+    if (delta > 100) return '#e74c3c'; // red for high delta
+    return '#27ae60'; // green
+}
+
+function getTempColor(temp) {
+    if (temp > 60) return '#e74c3c'; // red
+    if (temp < 0) return '#3498db'; // blue
+    return '#27ae60'; // green
+}
+
+function updateLogs() {
+    fetch('/api/logs').then(response => response.text()).then(logs => {
+        document.getElementById('log-container').textContent = logs;
+        // Auto scroll to bottom
+        let container = document.getElementById('log-container');
+        container.scrollTop = container.scrollHeight;
+    }).catch(error => console.error('Error fetching logs:', error));
+}
+
+function updateData() {
+    console.log('Fetching /api/data');
+    fetch('/api/data').then(response => {
+        console.log('Response received', response.status);
+        return response.json();
+    }).then(data => {
+        console.log('Data parsed', data);
+        // Update battery
+        document.getElementById('battery-svg').innerHTML = createBatterySVG(data.soc);
+
+        // Update metric cards
+        document.getElementById('voltage-value').textContent = data.voltage;
+        document.getElementById('current-value').textContent = data.current;
+        document.getElementById('avg-cell-value').textContent = data.avgCellVolt;
+        document.getElementById('low-cell-value').textContent = data.lowCellVolt;
+        document.getElementById('high-cell-value').textContent = data.highCellVolt;
+        document.getElementById('delta-value').textContent = data.delta;
+        document.getElementById('avg-temp-value').textContent = data.avgTemp;
+        document.getElementById('modules-value').textContent = data.modules;
+
+        // Update colors
+        document.getElementById('current-card').style.backgroundColor = getCurrentColor(data.current);
+        document.getElementById('low-cell-card').style.backgroundColor = getCellColor(data.lowCellVolt);
+        document.getElementById('low-cell-card').title = allCells.length > 0 ? 'Lowest cell: M' + minInfo.module + 'C' + String(minInfo.cell).padStart(2, '0') : 'No cells';
+        document.getElementById('high-cell-card').style.backgroundColor = getCellColor(data.highCellVolt);
+        document.getElementById('high-cell-card').title = allCells.length > 0 ? 'Highest cell: M' + maxInfo.module + 'C' + String(maxInfo.cell).padStart(2, '0') : 'No cells';
+        document.getElementById('delta-card').style.backgroundColor = getDeltaColor(data.delta);
+        document.getElementById('temp-card').style.backgroundColor = getTempColor(data.avgTemp);
+
+        // Collect all cell voltages with indices
+        let allCells = [];
+        let cellInfo = [];
+        data.moduleData.forEach((module, modIdx) => {
+            module.cells.forEach((cell, cellIdx) => {
+                let voltage = parseFloat(cell);
+                allCells.push(voltage);
+                cellInfo.push({module: modIdx + 1, cell: cellIdx + 1, voltage: voltage});
+            });
+        });
+        let minCell, maxCell, minInfo, maxInfo;
+        if (allCells.length > 0) {
+            minCell = Math.min(...allCells);
+            maxCell = Math.max(...allCells);
+            minInfo = cellInfo.find(info => info.voltage === minCell);
+            maxInfo = cellInfo.find(info => info.voltage === maxCell);
+        } else {
+            minInfo = {module: 0, cell: 0};
+            maxInfo = {module: 0, cell: 0};
+        }
+
+        // Update modules
+        let modulesHtml = '';
+
+        // Add bar graph first
+        if (allCells.length > 0) {
+            let barWidth = 15;
+            let barSpacing = 2;
+            let maxHeight = 120;
+            let svgWidth = allCells.length * (barWidth + barSpacing);
+            let bars = '';
+            allCells.forEach((cell, idx) => {
+                let height = (cell / 5.0) * maxHeight; // assuming 0-5V range
+                let y = maxHeight - height;
+                let color = (cell === maxCell) ? 'black' : (cell === minCell) ? 'red' : 'blue';
+                let moduleNum = Math.floor(idx / 6) + 1;
+                let cellNum = (idx % 6) + 1;
+                let tooltip = 'M' + moduleNum + 'C' + String(cellNum).padStart(2, '0') + ': ' + cell + 'V';
+                bars += `<rect x="${idx * (barWidth + barSpacing)}" y="${y}" width="${barWidth}" height="${height}" fill="${color}"><title>${tooltip}</title></rect>`;
+            });
+            modulesHtml += '<div style="margin-bottom: 20px;"><h4>Cell Voltage Bar Graph</h4><svg width="' + svgWidth + '" height="' + maxHeight + '">' + bars + '</svg></div>';
+        } else {
+            modulesHtml += '<div style="margin-bottom: 20px;"><h4>No modules detected</h4></div>';
+        }
+
+        let color1 = '#f5ad42';
+        let color2 = '#42e0f5';
+        let isColor1 = true;
+        data.moduleData.forEach(module => {
+            let color = isColor1 ? color1 : color2;
+            modulesHtml += '<div class="module" style="background-color: ' + color + '"><h4>Module #' + module.id + ' - ' + module.voltage + 'V</h4>';
+            module.cells.forEach((cell, index) => {
+                let cellNum = 'C' + String(index + 1).padStart(2, '0');
+                modulesHtml += '<span>' + cellNum + ': ' + cell + 'V </span>';
+            });
+            modulesHtml += '<br>Temp 1: ' + module.temp1 + '°C Temp 2: ' + module.temp2 + '°C</div>';
+            isColor1 = !isColor1;
+        });
+
+        document.getElementById('modules').innerHTML = modulesHtml;
+    }).catch(error => {
+        console.error('Error fetching data:', error);
+        document.getElementById('modules').innerHTML = 'Error loading cell data';
+    });
+}
+
+function loadSettings() {
+    fetch('/api/settings').then(response => response.json()).then(settings => {
+        for (let key in settings) {
+            let input = document.querySelector(`input[name="${key}"]`);
+            if (input) {
+                if (key.includes('Vsetpoint') || key.includes('Voltage')) {
+                    input.value = settings[key] * 1000; // convert to mV
+                } else {
+                    input.value = settings[key];
+                }
+            }
+        }
+    }).catch(error => console.error('Error loading settings:', error));
+}
+
+document.getElementById('settings-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    let formData = new FormData(this);
+    let settings = {};
+    for (let [key, value] of formData) {
+        if (key.includes('Vsetpoint') || key.includes('Voltage')) {
+            settings[key] = parseFloat(value) / 1000; // convert from mV
+        } else {
+            settings[key] = parseFloat(value);
+        }
+    }
+    fetch('/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(settings)
+    }).then(response => {
+        if (response.ok) {
+            alert('Settings saved successfully');
+        } else {
+            alert('Error saving settings');
+        }
+    }).catch(error => console.error('Error saving settings:', error));
+});
+
+setInterval(updateData, 2000);
+setInterval(updateLogs, 5000);
+updateData(); // initial load
+updateLogs(); // initial load
+loadSettings(); // load settings on page load
+</script>
+</body>
+</html>
