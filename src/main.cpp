@@ -37,6 +37,7 @@
 #include <AsyncTCP.h>
 #include "LittleFS.h"
 #include <AsyncElegantOTA.h>
+#include <ArduinoJson.h>
 
 AsyncWebServer server(80);
 // Search for parameter in HTTP POST request
@@ -451,6 +452,80 @@ void setup()
   });
   server.serveStatic("/", LittleFS, "/");
   AsyncElegantOTA.begin(&server);
+
+  server.on("/api/data", HTTP_GET, [](AsyncWebServerRequest *request){
+      DynamicJsonDocument doc(4096);
+      doc["soc"] = SOC;
+      doc["voltage"] = bms.getPackVoltage();
+      doc["current"] = currentact / 1000.0;
+      doc["avgCellVolt"] = bms.getAvgCellVolt();
+      doc["lowCellVolt"] = bms.getLowCellVolt();
+      doc["highCellVolt"] = bms.getHighCellVolt();
+      doc["delta"] = (bms.getHighCellVolt() - bms.getLowCellVolt()) * 1000;
+      doc["avgTemp"] = bms.getAvgTemperature();
+      doc["modules"] = bms.getNumModules();
+      JsonArray moduleData = doc.createNestedArray("moduleData");
+      for (int y = 1; y <= bms.getNumModules(); y++)
+      {
+          JsonObject mod = moduleData.createNestedObject();
+          mod["id"] = y;
+          mod["voltage"] = bms.getModuleVoltage(y);
+          JsonArray cells = mod.createNestedArray("cells");
+          for (int i = 0; i < bms.getNumCells(y); i++)
+          {
+              cells.add(String(bms.getcellvolt(y, i) / 1000.0, 3));
+          }
+          mod["temp1"] = bms.gettemp(y, 0);
+          mod["temp2"] = bms.gettemp(y, 1);
+      }
+      String json;
+      serializeJson(doc, json);
+      request->send(200, "application/json", json);
+  });
+
+  server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest *request){
+      DynamicJsonDocument doc(2048);
+      doc["OverVSetpoint"] = settings.OverVSetpoint;
+      doc["UnderVSetpoint"] = settings.UnderVSetpoint;
+      doc["ChargeVsetpoint"] = settings.ChargeVsetpoint;
+      doc["DischVsetpoint"] = settings.DischVsetpoint;
+      doc["balanceVoltage"] = settings.balanceVoltage;
+      doc["OverTSetpoint"] = settings.OverTSetpoint;
+      doc["UnderTSetpoint"] = settings.UnderTSetpoint;
+      doc["CAP"] = settings.CAP;
+      doc["Pstrings"] = settings.Pstrings;
+      doc["Scells"] = settings.Scells;
+      String json;
+      serializeJson(doc, json);
+      request->send(200, "application/json", json);
+  });
+
+  server.on("/api/settings", HTTP_POST, [](AsyncWebServerRequest *request){
+      if (request->hasParam("body", true)) {
+          String body = request->getParam("body", true)->value();
+          DynamicJsonDocument doc(2048);
+          deserializeJson(doc, body);
+          if (doc.containsKey("OverVSetpoint")) settings.OverVSetpoint = doc["OverVSetpoint"];
+          if (doc.containsKey("UnderVSetpoint")) settings.UnderVSetpoint = doc["UnderVSetpoint"];
+          if (doc.containsKey("ChargeVsetpoint")) settings.ChargeVsetpoint = doc["ChargeVsetpoint"];
+          if (doc.containsKey("DischVsetpoint")) settings.DischVsetpoint = doc["DischVsetpoint"];
+          if (doc.containsKey("balanceVoltage")) settings.balanceVoltage = doc["balanceVoltage"];
+          if (doc.containsKey("OverTSetpoint")) settings.OverTSetpoint = doc["OverTSetpoint"];
+          if (doc.containsKey("UnderTSetpoint")) settings.UnderTSetpoint = doc["UnderTSetpoint"];
+          if (doc.containsKey("CAP")) settings.CAP = doc["CAP"];
+          if (doc.containsKey("Pstrings")) settings.Pstrings = doc["Pstrings"];
+          if (doc.containsKey("Scells")) settings.Scells = doc["Scells"];
+          EEPROM.put(0, settings);
+          request->send(200, "text/plain", "Settings updated");
+      } else {
+          request->send(400, "text/plain", "No body");
+      }
+  });
+
+  server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/plain", "BMS logs: System running\n");
+  });
+
   server.begin();
   }
   else {

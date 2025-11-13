@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <head>
     <title>ESP32 SimpBMS Dashboard</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" type="text/css" href="ccs/bms.css">
 </head>
 <html>
@@ -133,7 +134,7 @@ function getTempColor(temp) {
 }
 
 function updateLogs() {
-    fetch('/api/logs').then(response => response.text()).then(logs => {
+    fetch('http://localhost:5000/api/logs').then(response => response.text()).then(logs => {
         document.getElementById('log-container').textContent = logs;
         // Auto scroll to bottom
         let container = document.getElementById('log-container');
@@ -143,7 +144,7 @@ function updateLogs() {
 
 function updateData() {
     console.log('Fetching /api/data');
-    fetch('/api/data').then(response => {
+    fetch('http://localhost:5000/api/data').then(response => {
         console.log('Response received', response.status);
         return response.json();
     }).then(data => {
@@ -160,15 +161,6 @@ function updateData() {
         document.getElementById('delta-value').textContent = data.delta;
         document.getElementById('avg-temp-value').textContent = data.avgTemp;
         document.getElementById('modules-value').textContent = data.modules;
-
-        // Update colors
-        document.getElementById('current-card').style.backgroundColor = getCurrentColor(data.current);
-        document.getElementById('low-cell-card').style.backgroundColor = getCellColor(data.lowCellVolt);
-        document.getElementById('low-cell-card').title = allCells.length > 0 ? 'Lowest cell: M' + minInfo.module + 'C' + String(minInfo.cell).padStart(2, '0') : 'No cells';
-        document.getElementById('high-cell-card').style.backgroundColor = getCellColor(data.highCellVolt);
-        document.getElementById('high-cell-card').title = allCells.length > 0 ? 'Highest cell: M' + maxInfo.module + 'C' + String(maxInfo.cell).padStart(2, '0') : 'No cells';
-        document.getElementById('delta-card').style.backgroundColor = getDeltaColor(data.delta);
-        document.getElementById('temp-card').style.backgroundColor = getTempColor(data.avgTemp);
 
         // Collect all cell voltages with indices
         let allCells = [];
@@ -190,6 +182,15 @@ function updateData() {
             minInfo = {module: 0, cell: 0};
             maxInfo = {module: 0, cell: 0};
         }
+
+        // Update colors
+        document.getElementById('current-card').style.backgroundColor = getCurrentColor(data.current);
+        document.getElementById('low-cell-card').style.backgroundColor = getCellColor(data.lowCellVolt);
+        document.getElementById('low-cell-card').title = allCells.length > 0 ? 'Lowest cell: M' + minInfo.module + 'C' + String(minInfo.cell).padStart(2, '0') : 'No cells';
+        document.getElementById('high-cell-card').style.backgroundColor = getCellColor(data.highCellVolt);
+        document.getElementById('high-cell-card').title = allCells.length > 0 ? 'Highest cell: M' + maxInfo.module + 'C' + String(maxInfo.cell).padStart(2, '0') : 'No cells';
+        document.getElementById('delta-card').style.backgroundColor = getDeltaColor(data.delta);
+        document.getElementById('temp-card').style.backgroundColor = getTempColor(data.avgTemp);
 
         // Update modules
         let modulesHtml = '';
@@ -215,19 +216,27 @@ function updateData() {
             modulesHtml += '<div style="margin-bottom: 20px;"><h4>No modules detected</h4></div>';
         }
 
-        let color1 = '#f5ad42';
-        let color2 = '#42e0f5';
+        modulesHtml += '<div class="modules-grid">';
         let isColor1 = true;
         data.moduleData.forEach(module => {
-            let color = isColor1 ? color1 : color2;
-            modulesHtml += '<div class="module" style="background-color: ' + color + '"><h4>Module #' + module.id + ' - ' + module.voltage + 'V</h4>';
+            let backgroundColor = isColor1 ? '#f5ad42' : '#42e0f5';
+            modulesHtml += '<div class="module" style="background-color: ' + backgroundColor + ';"><h4>Module #' + module.id + ' - ' + module.voltage + 'V</h4>';
+            let minCell = Math.min(...module.cells);
+            let maxCell = Math.max(...module.cells);
             module.cells.forEach((cell, index) => {
                 let cellNum = 'C' + String(index + 1).padStart(2, '0');
-                modulesHtml += '<span>' + cellNum + ': ' + cell + 'V </span>';
+                let cellStyle = '';
+                if (cell == minCell) {
+                    cellStyle = 'background-color: #e74c3c; color: white;'; // red for min cell in module
+                } else if (cell == maxCell) {
+                    cellStyle = 'background-color: #27ae60; color: white;'; // green for max cell in module
+                }
+                modulesHtml += '<span style="' + cellStyle + '">' + cellNum + ': ' + cell + 'V </span>';
             });
             modulesHtml += '<br>Temp 1: ' + module.temp1 + '°C Temp 2: ' + module.temp2 + '°C</div>';
             isColor1 = !isColor1;
         });
+        modulesHtml += '</div>';
 
         document.getElementById('modules').innerHTML = modulesHtml;
     }).catch(error => {
@@ -237,7 +246,7 @@ function updateData() {
 }
 
 function loadSettings() {
-    fetch('/api/settings').then(response => response.json()).then(settings => {
+    fetch('http://localhost:5000/api/settings').then(response => response.json()).then(settings => {
         for (let key in settings) {
             let input = document.querySelector(`input[name="${key}"]`);
             if (input) {
@@ -262,7 +271,7 @@ document.getElementById('settings-form').addEventListener('submit', function(e) 
             settings[key] = parseFloat(value);
         }
     }
-    fetch('/api/settings', {
+    fetch('http://localhost:5000/api/settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(settings)

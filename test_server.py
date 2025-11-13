@@ -1,8 +1,16 @@
 from flask import Flask, jsonify, send_from_directory
 import random
 import json
+import time
 
 app = Flask(__name__)
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
 
 @app.route('/')
 def index():
@@ -10,10 +18,11 @@ def index():
 
 @app.route('/api/data')
 def api_data():
+    time.sleep(6)  # Simulate slower response
     # Generate random BMS data
-    modules = random.randint(1, 10)
+    modules = random.randint(5, 8)
     voltage = round(random.uniform(300, 400), 2)
-    soc = random.randint(0, 100)
+    soc = random.randint(10, 90)
     current = round(random.uniform(-50, 50), 2)
     avgCellVolt = round(random.uniform(3.5, 4.2), 3)
     lowCellVolt = round(avgCellVolt - random.uniform(0, 0.5), 3)
@@ -71,9 +80,17 @@ def post_settings():
     # For now, just return success
     return jsonify({"status": "success"})
 
+@app.route('/api/logs')
+def api_logs():
+    return "BMS logs: System running\n"
+
 @app.route('/ccs/<path:filename>')
 def css_files(filename):
     return send_from_directory('data/ccs', filename)
+
+@app.route('/favicon.png')
+def favicon():
+    return send_from_directory('data', 'favicon.png')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

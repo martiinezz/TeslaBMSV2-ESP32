@@ -845,3 +845,13 @@ uint16_t BMSModuleManager::gettemp(int modid, int tempid)
 {
   return (modules[modid].getTemperature(tempid));
 }
+
+float BMSModuleManager::getModuleVoltage(int modid)
+{
+    return modules[modid].getModuleVoltage();
+}
+
+int BMSModuleManager::getNumCells(int modid)
+{
+    return modules[modid].getscells();
+}
